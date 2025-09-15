@@ -1,72 +1,180 @@
-<HTML>
+<!DOCTYPE html>
 <html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <title>Построение линий (Брезенхэм) — исправленный</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    #controls { margin-bottom: 10px; }
+    canvas { border: 1px solid #222; cursor: crosshair; display:block; }
+    .inputs { margin-top: 10px; }
+    .inputs input { width: 70px; margin-right:6px; }
+    #status { margin-top: 8px; color: #900; min-height: 18px; }
+  </style>
+</head>
 <body>
-  <h1>Построение линии по алгоритму Брезенгема</h1>
-  <div class="form-group">
-    <label for="x0">x0:</label>
-    <input type="number" id="x0" value="10">
-    <label for="y0">y0:</label>
-    <input type="number" id="y0" value="10">
+  <h3>Построение линий по алгоритму Брезенхэма</h3>
+
+  <div id="controls">
+    <label for="color">Цвет линии:</label>
+    <input type="color" id="color" value="#0000ff">
   </div>
 
-  <div class="form-group">
-    <label for="x1">x1:</label>
-    <input type="number" id="x1" value="100">
-    <label for="y1">y1:</label>
-    <input type="number" id="y1" value="100">
+  <p>Вариант 1: кликни мышкой дважды на canvas — первая точка начало линии, вторая — конец.</p>
+  <p>Вариант 2: введи координаты вручную:</p>
+
+  <div class="inputs">
+    <label>X1: <input type="number" id="x1" value="50"></label>
+    <label>Y1: <input type="number" id="y1" value="50"></label>
+    <label>X2: <input type="number" id="x2" value="200"></label>
+    <label>Y2: <input type="number" id="y2" value="150"></label>
+    <button id="drawBtn">Построить линию</button>
   </div>
 
-  <div class="form-group">
-    <label for="color">Цвет:</label>
-    <input type="color" id="colorPicker" value="#000000">
-  </div>
+  <p><button id="clearBtn">Очистить холст</button></p>
 
-  <button onclick="drawLine()">Построить</button>
-
-  <p></p>
-  <canvas id="canvas" width="400" height="400"></canvas>
+  <canvas id="canvas" width="600" height="400"></canvas>
+  <div id="status"></div>
 
   <script>
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const pixelSize = 1;
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const colorInput = document.getElementById("color");
 
-    function putPixel(x, y) {
-      ctx.fillRect(x, y, pixelSize, pixelSize);
+    const x1Input = document.getElementById("x1");
+    const y1Input = document.getElementById("y1");
+    const x2Input = document.getElementById("x2");
+    const y2Input = document.getElementById("y2");
+    const drawBtn = document.getElementById("drawBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const status = document.getElementById("status");
+
+    let clickCount = 0;
+    let startPoint = null;
+    let lines = []; // массив всех линий
+
+    function showStatus(text, isError = true) {
+      status.textContent = text || "";
+      status.style.color = isError ? "#900" : "#090";
+      if (!text) status.style.minHeight = "18px";
     }
 
-    function bresenham(x0, y0, x1, y1) {
-      let dx = Math.abs(x1 - x0);
-      let dy = Math.abs(y1 - y0);
-      let sx = (x0 < x1) ? 1 : -1;
-      let sy = (y0 < y1) ? 1 : -1;
+    function toIntStrict(v) {
+      const n = parseInt(v, 10);
+      return Number.isFinite(n) ? n : null;
+    }
+
+    canvas.addEventListener("click", (e) => {
+      showStatus(""); // очистить статус
+      const rect = canvas.getBoundingClientRect();
+      const point = {
+        x: Math.round(e.clientX - rect.left),
+        y: Math.round(e.clientY - rect.top)
+      };
+
+      if (clickCount === 0) {
+        startPoint = point;
+        clickCount = 1;
+        showStatus(`Начальная точка: (${point.x}, ${point.y})`, false);
+      } else {
+        lines.push({
+          x1: startPoint.x,
+          y1: startPoint.y,
+          x2: point.x,
+          y2: point.y,
+          color: colorInput.value
+        });
+        clickCount = 0;
+        startPoint = null;
+        drawAll();
+        showStatus(`Линия добавлена: (${lines[lines.length-1].x1},${lines[lines.length-1].y1}) → (${lines[lines.length-1].x2},${lines[lines.length-1].y2})`, false);
+      }
+    });
+
+    drawBtn.addEventListener("click", () => {
+      showStatus("");
+      const x1 = toIntStrict(x1Input.value);
+      const y1 = toIntStrict(y1Input.value);
+      const x2 = toIntStrict(x2Input.value);
+      const y2 = toIntStrict(y2Input.value);
+
+      if (x1 === null || y1 === null || x2 === null || y2 === null) {
+        showStatus("Ошибка: введите корректные целые координаты X1,Y1,X2,Y2.");
+        return;
+      }
+
+      lines.push({
+        x1, y1, x2, y2,
+        color: colorInput.value
+      });
+
+      drawAll();
+      showStatus(`Линия добавлена: (${x1},${y1}) → (${x2},${y2})`, false);
+    });
+
+    clearBtn.addEventListener("click", () => {
+      lines = [];
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      showStatus("Холст очищен.", false);
+    });
+
+    function drawAll() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (const line of lines) {
+        ctx.fillStyle = line.color || "#000";
+        bresenhamLine(line.x1, line.y1, line.x2, line.y2);
+      }
+    }
+
+    function bresenhamLine(x1, y1, x2, y2) {
+      if (![x1, y1, x2, y2].every(Number.isFinite)) {
+        console.warn("bresenhamLine: некорректные координаты", x1, y1, x2, y2);
+        return;
+      }
+
+      if (x1 === x2 && y1 === y2) {
+        putPixel(x1, y1);
+        return;
+      }
+
+      let dx = Math.abs(x2 - x1);
+      let dy = Math.abs(y2 - y1);
+      let sx = x1 < x2 ? 1 : -1;
+      let sy = y1 < y2 ? 1 : -1;
       let err = dx - dy;
 
+      let safety = 0;
+      const SAFETY_MAX = 1_000_000;
+
       while (true) {
-        putPixel(x0, y0);
-        if (x0 === x1 && y0 === y1) break;
+        putPixel(x1, y1);
+
+        if (x1 === x2 && y1 === y2) break;
+
+        if (++safety > SAFETY_MAX) {
+          console.warn("bresenhamLine: прервано по safety limit", {x1,y1,x2,y2,dx,dy});
+          break;
+        }
+
         let e2 = 2 * err;
         if (e2 > -dy) {
           err -= dy;
-          x0 += sx;
+          x1 += sx;
         }
         if (e2 < dx) {
           err += dx;
-          y0 += sy;
+          y1 += sy;
         }
       }
     }
 
-    function drawLine() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const x0 = parseInt(document.getElementById('x0').value, 10);
-      const y0 = parseInt(document.getElementById('y0').value, 10);
-      const x1 = parseInt(document.getElementById('x1').value, 10);
-      const y1 = parseInt(document.getElementById('y1').value, 10);
-      const color = document.getElementById('colorPicker').value;
-      ctx.fillStyle = color;
-      bresenham(x0, y0, x1, y1);
+    function putPixel(x, y) {
+      if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return;
+      ctx.fillRect(x, y, 1, 1);
     }
+
+    showStatus("Готово. Кликни на canvas или введи координаты и нажми «Построить линию».", false);
   </script>
 </body>
-</HTML>
+</html>
